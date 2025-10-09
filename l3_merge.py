@@ -82,9 +82,9 @@ else:
     exit()
 
 if coalign == True:
-    if nfiles != 3:
-        print("   to co-align we need 3 input files. Exiting ...")
-        exit()
+#    if nfiles != 3:
+#        print("   to co-align we need 3 input files. Exiting ...")
+#        exit()
     if docenter == True:
         print("   Centering [default?] and co-aligning of images are requested. We do co-aligning only.")
         docenter = False
@@ -102,18 +102,18 @@ if nfiles == 3:
 
 
 if forceCRVAL1:
-    header01['CRVAL1']=CRVAL1       ;  header01.set('HISTORY','Forced CRVAL1')
+    header01['CRVAL1']=CRVAL1       ;  header01.set('HISTORY','Forced CRVAL1 {:.2f} arcsec'.format(CRVAL1))
     if nfiles >= 2:
-        header1['CRVAL1']=CRVAL1    ;  header1.set('HISTORY','Forced CRVAL1')
+        header1['CRVAL1']=CRVAL1    ;  header1.set('HISTORY','Forced CRVAL1 {:.2f} arcsec'.format(CRVAL1))
     if nfiles == 3:
-        header10['CRVAL1']=CRVAL1   ;  header10.set('HISTORY','Forced CRVAL1')
+        header10['CRVAL1']=CRVAL1   ;  header10.set('HISTORY','Forced CRVAL1 {:.2f} arcsec'.format(CRVAL1))
 
 if forceCRVAL2:
-    header01['CRVAL2']=CRVAL2       ;  header01.set('HISTORY','Forced CRVAL2')
+    header01['CRVAL2']=CRVAL2       ;  header01.set('HISTORY','Forced CRVAL2 {:.2f} arcsec'.format(CRVAL2))
     if nfiles >= 2:
-        header1['CRVAL2']=CRVAL2    ;  header1.set('HISTORY','Forced CRVAL2')
+        header1['CRVAL2']=CRVAL2    ;  header1.set('HISTORY','Forced CRVAL2 {:.2f} arcsec'.format(CRVAL2))
     if nfiles == 3:
-        header10['CRVAL2']=CRVAL2   ;  header10.set('HISTORY','Forced CRVAL2')
+        header10['CRVAL2']=CRVAL2   ;  header10.set('HISTORY','Forced CRVAL2 {:.2f} arcsec'.format(CRVAL2))
 
 
 
@@ -137,11 +137,16 @@ if docenter == True:
         headerRef=header10.copy()
 
 if coalign == True:
-    print("  ************************** file01 ************************** ")
-    data01 = am.shift_image(data01,header01,header10,verbose=True)
-    print("  ************************** file1 ************************** ")
-    data1 = am.shift_image(data1,header1,header10,verbose=True)
-    headerRef=header10.copy()
+    if nfiles == 2:
+       print("  ************************** file01 ************************** ")
+       data01 = am.shift_image(data01,header01,header1,verbose=True)
+       headerRef=header1.copy()
+    if nfiles == 3:
+       print("  ************************** file01 ************************** ")
+       data01 = am.shift_image(data01,header01,header10,verbose=True)
+       print("  ************************** file1 ************************** ")
+       data1 = am.shift_image(data1,header1,header10,verbose=True)
+       headerRef=header10.copy()
    
 
 # Merging two or three images. By default take the data from data10, but substitute the NaN/Inf pixels via the pixels from smaller exposure file
