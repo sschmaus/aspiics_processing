@@ -196,6 +196,7 @@ if args.save_diff:
     print("%    Saving diffraction to "+file2write)
     hdu.writeto(file2write,checksum=True,overwrite=True)
 
+#### Correction of hot pixels
 Med  = ndimage.median_filter(Im,size=(3,3))                           # Median-filtered array for bad/hot pixels identification
 BadPixIdx = np.absolute(Im-Med) > eta2*np.sqrt(Var)      #eta2        # It fails and selects bright structures in the corona for synthetic and eclipse data
 BadPixIdx_mask = np.zeros((2048,2048)) ; BadPixIdx_mask[BadPixIdx] = 1 ;    #plt.imshow(BadPixIdx_mask,origin='lower') ; plt.colorbar() ; plt.show()    # Show masked

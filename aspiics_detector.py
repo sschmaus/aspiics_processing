@@ -171,15 +171,16 @@ def get_nlcorr(Im,header,params,**kwargs):
     # The pixels with too high values (outside y range) are normally extrapolated ... and get negative values
     # We are creating a mask and restore original signal for such pixels. They will be marked afterwards as overexposed.
     OvrExpIdx = Im > np.max(y)
+    satlevel = np.max(y)
  
     tck = interpolate.splrep(y,x,s=0)
     Im1 = interpolate.splev(Im, tck, der=0)    
     
     if np.count_nonzero(OvrExpIdx)>0:
-        print("    We found "+'{:0.0f}'.format(np.count_nonzero(OvrExpIdx))+" pixels with the value outside available data ("+'{:0.1f}'.format(np.max(y))+" [electron]). We keep them unmodified, they will be marked later on as overexposed.")
-        Im1[OvrExpIdx]=Im[OvrExpIdx]
+        print("    We found "+'{:0.0f}'.format(np.count_nonzero(OvrExpIdx))+" pixels with the value outside available data ("+'{:0.1f}'.format(np.max(y))+" [electron]). We clip them to the maximum possible value from the look-up table.")
+        Im1[OvrExpIdx]=np.max(y)
 
-    return Im1, version_msg
+    return Im1, satlevel, version_msg
 
 
 def readout_noise(header,params,**kwarg):
