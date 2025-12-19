@@ -12,6 +12,10 @@
 
 ## Line noise ideas
 
+* identify consistently bad rows to apply stronger bad pixel correction
+
+Old:
+
 * line filter fix:
 * subtract 2d median to remove continuum
 * apply 1d median to remove stars etc..
