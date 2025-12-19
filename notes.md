@@ -1,4 +1,6 @@
-## L2 observations
+# ASPIICS processing notes
+
+## L2 calibration
 
 * arbitrary gain value
 * linearity correction bug:
@@ -8,12 +10,11 @@
 * flat is not bias corrected
 * flat doesn't correct all spots
 
-
 ## Line noise ideas
 
-line filter fix:
-subtract 2d median to remove continuum
-apply 1d median to remove stars etc..
-average lines (possibly split lr)
-subtract median to remove large remaining features
-separate alternating collumns
+* line filter fix:
+* subtract 2d median to remove continuum
+* apply 1d median to remove stars etc..
+* average lines (possibly split lr)
+* subtract median to remove large remaining features
+* separate alternating collumns
