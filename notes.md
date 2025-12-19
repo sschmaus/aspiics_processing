@@ -13,6 +13,7 @@
 ## Line noise ideas
 
 * identify consistently bad rows to apply stronger bad pixel correction
+* the banding in the flat is actually useful and is worth keeping
 
 Old:
 
