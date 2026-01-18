@@ -1,6 +1,7 @@
 #!/bin/python3
 import numpy as np
 from scipy import ndimage
+from skimage import morphology
 from astropy.io import fits
 import matplotlib.pyplot as plt
 #import aspiics_detector  as det
@@ -8,7 +9,7 @@ import matplotlib.pyplot as plt
 import aspiics_misc       as am
 import argparse
 import os
-import sys
+from pathlib import Path
 
 print("%*******************************************************************************")
 print("% L3_Merge: processing ")
@@ -81,11 +82,11 @@ else:
     print("% L3_Merge: we expect 1--3 input files ... Exiting!")
     exit()
 
-if coalign == True:
+if coalign:
 #    if nfiles != 3:
 #        print("   to co-align we need 3 input files. Exiting ...")
 #        exit()
-    if docenter == True:
+    if docenter:
         print("   Centering [default?] and co-aligning of images are requested. We do co-aligning only.")
         docenter = False
 
@@ -122,7 +123,7 @@ if forceCRVAL2:
 #if nfiles == 3:
 #    data10, header10=am.read_fits_image_array(file10)
 
-if docenter == True: 
+if docenter: 
     print("    Re-centering images:")
     print("  ************************** file01 ************************** ")
     data01 = am.rotate_center1(data01,header01,verbose=True)
@@ -136,7 +137,7 @@ if docenter == True:
         data10 = am.rotate_center1(data10,header10,verbose=True)
         headerRef=header10.copy()
 
-if coalign == True:
+if coalign:
     if nfiles == 2:
        print("  ************************** file01 ************************** ")
        data01 = am.shift_image(data01,header01,header1,verbose=True)
@@ -147,19 +148,60 @@ if coalign == True:
        print("  ************************** file1 ************************** ")
        data1 = am.shift_image(data1,header1,header10,verbose=True)
        headerRef=header10.copy()
-   
+
+def soft_merge(data_under, data_over, distance=30, plot=False):
+    """ Merge two images using soft transition over given distance (in pixels).
+        data_high: high-exposure image (to be used where valid)
+        data_low: low-exposure image (to be used to fill invalid pixels in high-exposure image)
+        distance: distance (in pixels) over which the weights change from 0 to 1
+    """
+    data_under_mask = np.isfinite(data_under) # all valid pixels
+    data_over_mask = ~np.isnan(data_over) # all non-NaN pixels, inf is ok
+
+    # all over areas where under data is invalid
+    fill_mask = data_over_mask * (~data_under_mask)
+    # remove small islands in the fill_mask with remove_small_objects because borders may not overlap perfectly after the coregistration 
+    # fill_mask = morphology.remove_small_objects(fill_mask.astype(bool), min_size=64, connectivity=1)
+
+    # calculate soft gradient with distance transform
+    data_over_alpha = ndimage.distance_transform_edt(~fill_mask)
+    # normalize to distance - this could be improved by using the slope of the image to determine blending distance (e.g., larger distance for shallower slopes)
+    data_over_alpha = 1-np.clip(data_over_alpha/distance,0,1)
+    # mask any area of the soft mask which doesn't have valid data_over
+    data_over_alpha = data_over_alpha * data_over_mask * data_under_mask
+
+    # now do the merging
+    Im_out = data_under
+    Im_out[fill_mask] = data_over[fill_mask]
+    Im_out[data_over_alpha>0] = data_over[data_over_alpha>0] * data_over_alpha[data_over_alpha>0] + data_under[data_over_alpha>0] * (1 - data_over_alpha[data_over_alpha>0])
+
+    if plot:
+        fig, ax = plt.subplots(1,5, figsize=(15,5))
+        ax[0].imshow(data_under_mask, cmap='gray', vmin=0, vmax=1)
+        ax[0].set_title('data_under valid mask')
+        ax[1].imshow(data_over_mask, cmap='gray', vmin=0, vmax=1)
+        ax[1].set_title('data_over valid mask')
+        ax[2].imshow(fill_mask, cmap='gray', vmin=0, vmax=1)
+        ax[2].set_title('fill_mask for data_over')
+        ax[3].imshow(data_over_alpha, cmap='gray')
+        ax[3].set_title('soft blending edges for data_over')
+        ax[4].imshow(Im_out, cmap='gray')
+        ax[4].set_title('merged image')
+        plt.tight_layout()
+        plt.show()
+
+    return Im_out
+
 
 # Merging two or three images. By default take the data from data10, but substitute the NaN/Inf pixels via the pixels from smaller exposure file
 if nfiles == 3:
-    Im_out = data10
-    mask = ~np.isfinite(Im_out)
-    Im_out[mask] = data1[mask]
-    mask = ~np.isfinite(Im_out)
-    Im_out[mask] = data01[mask]
+    # pixels over which the weights change from 0 to 1
+    distance = 30  
+    Im_out = soft_merge(data1, data01, distance=distance, plot=False)
+    Im_out = soft_merge(data10, Im_out, distance=distance, plot=False)
+
 elif nfiles == 2:
-    Im_out = data1
-    mask = ~np.isfinite(Im_out)
-    Im_out[mask] = data01[mask]
+    Im_out = soft_merge(data1, data01, distance=30, plot=False)
 else:
     Im_out = data01
 
@@ -167,10 +209,10 @@ BadMask = Im_out < 0
 Im_out[BadMask] = 1e-11
 BadMask = ~np.isfinite(Im_out)
 #Im_out[BadMask] = np.nan
-DATAMIN = np.min(Im_out[ ~ BadMask])
-DATAMAX = np.max(Im_out[ ~ BadMask])
-DATAMEAN = np.mean(Im_out[ ~ BadMask])
-DATAMEDN = np.median(Im_out[ ~ BadMask])
+DATAMIN = np.nanmin(Im_out[ ~ BadMask])
+DATAMAX = np.nanmax(Im_out[ ~ BadMask])
+DATAMEAN = np.nanmean(Im_out[ ~ BadMask])
+DATAMEDN = np.nanmedian(Im_out[ ~ BadMask])
 
 
 
@@ -207,6 +249,9 @@ if nfiles == 3:
     headerM.set('HISTORY','  IO position {:.2f}/{:.2f}'.format(header10['X_IO'],header10['Y_IO']))
 
 ### ************* write down the final Im into fits ****
+if not os.path.exists(outputdir):
+    print("% L2_MASTER. Output directory "+outputdir+" does not exist. Creating it.")
+    Path(outputdir).mkdir(parents=True, exist_ok=True)
 hdu=fits.PrimaryHDU(Im_out,header=headerM)
 newname=os.path.splitext(os.path.basename(file10))[0]+'.merged.fits'
 newname=newname.replace("l2","l3")
