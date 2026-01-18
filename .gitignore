@@ -103,6 +103,5 @@ ehthumbs.db
 Desktop.ini
 
 # project
-data/
-calibration-data/
-output/
+calibration-data/*/*
+output/*

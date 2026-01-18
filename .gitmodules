@@ -1,11 +1,6 @@
-[submodule "imageutils"]
-	path = imageutils
-
 [submodule "l2_processor"]
 	path = l2_processor
 
 [submodule "l3_processor"]
 	path = l3_processor
 
-[submodule "aspiicsmap"]
-	path = aspiicsmap

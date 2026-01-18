@@ -1,4 +1,4 @@
-# ASPIICS processing notes
+# ASPIICS processing ideas
 
 ## L2 calibration
 
