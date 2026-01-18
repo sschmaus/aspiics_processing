@@ -6,7 +6,7 @@ Based on S.Shestov's version of ASPIICS Level 2 and 3 processor
 
 ## How to use
 
-1. Place the contents of the clibration [data release][https://gitlab-as.oma.be/P3SC/p3sc_calibration_data_repository/-/releases) 1.0 in the calibration-data directory
+1. Place the contents of the clibration [data release](https://gitlab-as.oma.be/P3SC/p3sc_calibration_data_repository/-/releases) 1.0 in the calibration-data directory
 2. Use process_l2_batch.ipynb to process the L2 files
 3. Use process_l3_batch.ipynb to process the L3 files
 
