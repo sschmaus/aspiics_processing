@@ -1,6 +1,9 @@
 [submodule "l2_processor"]
 	path = l2_processor
 
+	url = https://github.com/sschmaus/l2_processor/
 [submodule "l3_processor"]
 	path = l3_processor
+
+	url = https://github.com/sschmaus/l3_processor/
 
