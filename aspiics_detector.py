@@ -1,6 +1,7 @@
 import numpy as np
 from astropy.io import fits
 from scipy import interpolate
+from scipy.ndimage import median_filter, vectorized_filter, distance_transform_edt, binary_dilation
 import os
 
 ##### older version - in DN ###########
@@ -122,6 +123,216 @@ def flat(header,params,**kwargs):
 
     return imagedata, version_msg+" with "+file
 
+def fill_nan_mirror(a):
+    """Fill NaN values by mirroring across nearest valid value using distance transform."""
+    a = a.copy()
+    mask = np.isnan(a)
+    if not mask.any():
+        return a
+
+    # Find nearest valid indices
+    nearest_idx = distance_transform_edt(mask, return_distances=False, return_indices=True)
+
+    # Mirror across nearest valid value
+    mirrored_idx = tuple(
+        np.clip(2 * nearest_idx[dim] - np.indices(a.shape)[dim], 0, a.shape[dim]-1)
+        for dim in range(a.ndim)
+    )
+
+    return a[mirrored_idx]
+
+def fast_nanmedian(img, size, *args, **kwargs):
+    """Applies a windowed median filter to an image, handling NaN values appropriately.
+    Uses vectorized_filter with np.nanmedian for images with NaNs or of uint16 type,
+    otherwise uses faster standard median_filter.
+
+    Parameters:
+    -----------
+    img : numpy array
+        The input image to be filtered.
+    *args, **kwargs :
+        Additional arguments to be passed to the median filter functions.
+
+    Returns:
+    --------
+    filtered_img : numpy array
+        The median filtered image.
+    """
+    if np.ndim(img) != 2:
+        raise ValueError("fast_nanmedian only supports 2D images.")
+
+    if np.isnan(img).all():
+        # if all values are NaN, return as is
+        # print("All NaN image passed to fast_nanmedian, returning as is.")
+        return img
+    elif np.isnan(img).any():
+        mask = np.isfinite(img)
+        
+        r0 = mask.any(axis=1).argmax()
+        r1 = mask.shape[0] - mask.any(axis=1)[::-1].argmax()
+        c0 = mask.any(axis=0).argmax()
+        c1 = mask.shape[1] - mask.any(axis=0)[::-1].argmax()
+        cropped = img[r0:r1, c0:c1]
+
+        # print(f"Cropped region for vectorized nanmedian: rows {r0}-{r1}, cols {c0}-{c1}")
+
+        # fill NaNs in cropped region with nearest valid value
+        cropped = fill_nan_mirror(cropped)
+
+        # apply vectorized nanmedian to cropped region
+        cropped_filtered = median_filter(cropped, size=size, *args, **kwargs)
+
+        # place filtered cropped region back into all-NaN image
+        img_filtered = np.full_like(img, np.nan)
+        img_filtered[r0:r1, c0:c1] = cropped_filtered
+
+        return img_filtered
+    elif img.dtype == np.uint16:
+        # if uint16 type, use vectorized nanmedian
+        # print("Image with NaNs or uint16 type passed to vectorized nanmedian.")
+
+        mask = np.isfinite(img)
+
+        r0 = mask.any(axis=1).argmax()
+        r1 = mask.shape[0] - mask.any(axis=1)[::-1].argmax()
+        c0 = mask.any(axis=0).argmax()
+        c1 = mask.shape[1] - mask.any(axis=0)[::-1].argmax()
+        cropped = img[r0:r1, c0:c1]
+
+        # print(f"Cropped region for vectorized nanmedian: rows {r0}-{r1}, cols {c0}-{c1}")
+
+        # apply vectorized nanmedian to cropped region
+        cropped_filtered = vectorized_filter(cropped, size=size, function=np.nanmedian, *args, **kwargs)
+
+        # place filtered cropped region back into all-NaN image
+        img_filtered = np.full_like(img, np.nan)
+        img_filtered[r0:r1, c0:c1] = cropped_filtered
+
+        return img_filtered
+    else:
+        # if no NaNs, use faster median filter
+        return median_filter(img, size=size, *args, **kwargs)
+
+def correct_banding(img, filter_2d=15, filter_1d=None, structures_threshold=None, plotting=True):
+    """
+    Corrects banding along the first dimension in an image using specified filtering and averaging methods.
+
+    Parameters:
+    -----------
+    img : 2D numpy array
+        The input image to be corrected.
+    saturation_mask : 2D numpy array
+        A boolean mask indicating saturated pixels in the image.
+    filter_2d : int, optional
+        Size of the median filter applied in 2D to remove large structures.
+    filter_1d : int | False, optional
+        Size of the median filter applied in 1D to remove outliers.
+        Default is 4 * filter_2d.
+        If False, no 1D filtering is applied and banding profile is computed for the entire line with np.nanmedian.
+    structures_threshold : float, optional
+        Threshold in standard deviation units to identify remaining structures.
+        Default is 60 / filter_2d.
+
+    Returns:
+    --------
+    corrected_img : 2D numpy array
+        The banding-corrected image.
+
+    """
+    if structures_threshold is None:
+        structures_threshold = 60 / filter_2d # threshold varies with filter size
+    if filter_1d is None:
+        filter_1d = filter_2d * 4  # make 1d filter size proportional to 2d filter size
+
+    img_ref = np.float32(img.copy())
+
+    # img_ref = np.nan_to_num(img_ref, nan=np.nanmedian(img_ref))
+
+    # subtract median filtered image to remove large structures and isolate banding
+    img_med = fast_nanmedian(img_ref, size=filter_2d)
+    # img_nan = img_nan | median_filter(img_nan.astype(np.uint8), size=filter_2d).astype(bool)
+    img_ref = img_ref - img_med
+
+    if filter_1d is False:
+        # calculate median along axes to get banding profiles
+        # this is more robust against picking up corona detail than local median filtering
+        banding_vert = np.nanmedian(img_ref, axis=0)
+        banding_vert = np.repeat(banding_vert[np.newaxis, :], img_ref.shape[0], axis=0)
+    else:
+        # calculate banding with a moving 1d median filter
+        # can remove local banding variations better than global median
+        # but is more prone to picking up and removing aligned corona detail
+
+        #calculate standard deviation of the reference image to use for thresholding of remaining structures
+        banding_vert = np.nanmedian(img_ref, axis=0)
+        banding_vert = np.repeat(banding_vert[np.newaxis, :], img_ref.shape[0], axis=0)
+
+        std_ref = np.nanstd(img_ref)
+
+        # zero-out remaining structures above a certain amplitude
+        remaining_structures = np.abs(img_ref-banding_vert) > std_ref * structures_threshold
+        # dilate the remaining structures mask because not every pixel is caught by the threshold
+        structure = np.ones((3,3), dtype=bool)
+        remaining_structures = binary_dilation(remaining_structures, structure=structure)
+        # fill these areas with the global median banding profile
+        img_ref_ = img_ref.copy() # continue with copy so original is preserved for plotting
+        img_ref_[remaining_structures] = banding_vert[remaining_structures]
+
+        # img_ref = median_filter(img_ref, size=(1,filter_size))
+
+        # 1d median along columns to remove outliers
+        banding_vert = fast_nanmedian(img_ref_, size=filter_1d, axes=0)
+
+    corrected_img = img - banding_vert
+    
+    return corrected_img
+
+def correct_banding_dyadic(img, layers_2d=3, filter_1d=None, plotting=True):
+    """
+    Corrects banding along the first dimension in an image using specified filtering and averaging methods.
+
+    Parameters:
+    -----------
+    img : 2D numpy array
+        The input image to be corrected.
+    saturation_mask : 2D numpy array
+        A boolean mask indicating saturated pixels in the image.
+    layers_2d : int, optional
+        Number of dyadic layers of 2D median filtering to apply.
+        3 layers corresponds to filter sizes of 3, 7, and 15.
+    filter_1d : list of int | None, optional
+        List of 1D filter sizes corresponding to each 2D layer.
+        Default is None, which sets filter_1d to [filter_2d*7 for each layer].
+    Returns:
+    --------
+    corrected_img : 2D numpy array
+        The banding-corrected image.
+    """
+
+    if len(filter_1d) != layers_2d:
+        raise ValueError("filter_1d list length must match layers_2d")
+        
+    for layer in range(layers_2d):
+        # dyadic filter sizes:
+        filter_2d = 2 * (2 ** (layer+1)) - 1  # dyadic progression of filter sizes: 3,7,15,...
+        filter_1d_layer = filter_1d[layer] if filter_1d is not None else filter_2d * 7
+        print(f"Applying banding correction to layer {layer+1}/{layers_2d} with 2D filter size {filter_2d}")
+        corrected_img = correct_banding(img, filter_2d=filter_2d, filter_1d=filter_1d_layer, plotting=False)
+        img = corrected_img
+
+    return img
+
+def correct_banding_splitrows(img, *args, **kwargs):
+    img = img.copy()
+    img[0::2, :] = correct_banding(img[0::2, :], *args, **kwargs) # top left
+    img[1::2, :] = correct_banding(img[1::2, :], *args, **kwargs) # top right
+    return img
+
+def correct_banding_splitrows_dyadic(img, *args, **kwargs):
+    img = img.copy()
+    img[0::2, :] = correct_banding_dyadic(img[0::2, :], *args, **kwargs) # top left
+    img[1::2, :] = correct_banding_dyadic(img[1::2, :], *args, **kwargs) # top right
+    return img
 
 
 def gain(header,params,**kwargs):

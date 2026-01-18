@@ -20,7 +20,7 @@ def method2(im):
     return xc, yc
 
 def aspiics_get_opse(Image_in,header,params,**kwargs):
-    Im = Image_in   # create a local copy of image since I don't remember whether the input array is overwritten    
+    Im = np.uint16(np.nan_to_num(Image_in, nan=header['BLANK']))  # create a local copy of image since I don't remember whether the input array is overwritten    
     verbose=kwargs.get('verbose',False)
     save_image=kwargs.get('save_image',False)
 

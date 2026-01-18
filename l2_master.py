@@ -9,6 +9,7 @@ import aspiics_get_opse  as opse
 import parameters        as par
 import os
 import sys
+from pathlib import Path
 
 def read_fits_image_array(filename):
     """See https://docs.astropy.org/en/stable/io/fits/ for more info"""
@@ -88,17 +89,17 @@ print("%    Using calibration file:    ",args.cal,sep='')
 
 #  read filter-specific parameters and put then into main dictionary
 if filter=='Fe XIV':
-   params1=params['calib_data']['Fe XIV']
+    params1=params['calib_data']['Fe XIV']
 elif filter=='He I':
-   params1=params['calib_data']['He I']
+    params1=params['calib_data']['He I']
 elif filter=='Wideband':
-   params1=params['calib_data']['Wideband']
+    params1=params['calib_data']['Wideband']
 elif filter=='Polarizer 0':
-   params1=params['calib_data']['Polarizer 0']
+    params1=params['calib_data']['Polarizer 0']
 elif filter=='Polarizer 60':
-   params1=params['calib_data']['Polarizer 60']
+    params1=params['calib_data']['Polarizer 60']
 elif filter=='Polarizer 120':
-   params1=params['calib_data']['Polarizer 120']
+    params1=params['calib_data']['Polarizer 120']
 params['calib_data'].update(params1)
 
 ### *** this should be retrieved from the repository, as Level-1 data still has no this info *** 
@@ -146,40 +147,55 @@ Vread = np.ones((2048,2048))*(det.readout_noise(header,params)/gain)**2    # rea
 Vdc   = (dc*t_exp)  # np.sqrt(dc*t_exp)                                    # dark current variance, el/sec -> el         ?? -> sqrt()  ??
 #Vphot = np.full((2048,2048),1.0/gain)                                      # wrong: variance of photons = number of photons ~ Im/gain (since qe~1), but Im contains noise also
 Vphot = np.full((2048,2048),1.0)                                           # variance of photons = number of photons = numbers of photoelectrons. Which is calculated from Im in correspondent place
-                                                                           # Vphot==1 and will go as a factor to the photovariance;
+                                                                        # Vphot==1 and will go as a factor to the photovariance;
 #vign  = optics.vignetting(pixscale,x_IO,y_IO,R_IO,verbose=False)
 vign, vign_msg = optics.vignetting2(header,params)                         # vignetting takes into account variation of R_IO with polar angle
 BlankIdx = (Im == BLANK)
 
-# ***************** this part should correspond to the lines 8--25 of the pseudo-code of DPM *******************
-Imax = np.full((2048,2048),pow(2,14))                                 # the maximum value, 2D array. We need it to identify saturated pixels.
-Imax = (Imax - bias)/gain                                             # convert everything into el.
-Im   = (Im - bias)/gain
-Im,nlcorr_msg = det.get_nlcorr(Im,header,params)
-Var  = Vread + Vdc + np.multiply(Vphot,Im)*(Im > 0)                   # Variance map for the signal, 2D array
-Imax = Imax - eta1*np.sqrt(Var)                                       
-OvrExpIdx = Im > Imax                                                 # Boolean 2D array with overexposed pixels
-Im   = Im - dc*t_exp                                                  # In the original version the DC was subtracted before overexposed pixels, 
-                                                                      #   but in this case at long t_exp many pixels within saturated zone were marked as normal
+# set bad pixels to NaN
+Im = np.float32(Im)
+Im[BlankIdx]  = np.nan
 
-#### Correction of hot pixels was moved after the diffraction subtraction. The diffraction pattern has too steep gradients
-#Med  = ndimage.median_filter(Im,size=(3,3))                           # Median-filtered array for bad/hot pixels identification
-#BadPixIdx = np.absolute(Im-Med) > eta2*np.sqrt(Var)      #eta2        # It fails and selects bright structures in the corona for synthetic and eclipse data
-#BadPixIdx_mask = np.zeros((2048,2048)) ; BadPixIdx_mask[BadPixIdx] = 1
-###plt.imshow(BadPixIdx_mask,origin='lower') ; plt.colorbar() ; plt.show()
-#### Think about union of current BadPixIdx with repository-based HotPixels 
-##Im[BadPixIdx] = Med[BadPixIdx] 
-##Im[HotPixels] = Med[HotPixels]
+# ***************** this part should correspond to the lines 8--25 of the pseudo-code of DPM *******************
+Im   = (Im - bias)/gain
+
+Im, satlevel, nlcorr_msg = det.get_nlcorr(Im,header,params)                 # non-linearity correction, also returns saturation level in [el] to mask overexposed pixels later on 
+
+Var  = Vread + Vdc + np.multiply(Vphot,Im)*(Im > 0)                   # Variance map for the signal, 2D array
+
+OvrExpIdx = Im >= satlevel                                            # Boolean 2D array with overexposed pixels. Values may be larger than satlevel from B-Spline extrapolation of non-linearity curve
+
+Im   = Im - dc*t_exp                                                  # In the original version the DC was subtracted before overexposed pixels, 
+                                                                    #   but in this case at long t_exp many pixels within saturated zone were marked as normal
+
 
 ### When the optical part is commented out we should multiply by gain (introduced during DC subtraction)
 ### Do not forget to comment vignetting below                                                    ###
-#Im = Im*gain
+# Im = Im*gain
 #Im = np.divide(Im,flat)
+
+
 ### This is the optical part: radiometric calibration, subtraction of diffraction/ghost/scattering ###
 ### Do not forget to uncomment vignetting below                                                    ###
+
 Im   = np.divide(Im,            flat*(Aphot/gain*t_exp))           # here convert units to [MSB] (analog of [photon s-1 cm-2 sr-1]), as the gain was taken into account before
 Var  = np.divide(Var, np.square(flat*Aphot/gain*t_exp))
-tmpY,tmpZ = opse.aspiics_get_opse(Im,header,params,verbose=False,save_image=True)        # find position of the OPSE LEDs in the image
+
+### Apply banding correction after flat-fielding, as flat-field contains banding also
+### Parameters are tuned to remove banding without affecting real coronal structures too much (very small changes are unavoidable)
+Im = det.correct_banding_splitrows_dyadic(Im, layers_2d=3, filter_1d=[16,64,128], plotting=False)
+
+
+#### Correction of hot pixels was moved after the diffraction subtraction. The diffraction pattern has too steep gradients
+Med  = ndimage.median_filter(Im,size=(3,3))                           # Median-filtered array for bad/hot pixels identification
+BadPixIdx = np.absolute(Im-Med) > 15*np.sqrt(Var)      #eta2        # It fails and selects bright structures in the corona for synthetic and eclipse data
+# BadPixIdx_mask = np.zeros((2048,2048)) ; BadPixIdx_mask[BadPixIdx] = 1
+# plt.imshow(BadPixIdx_mask,origin='lower') ; plt.colorbar() ; plt.show()
+#### Think about union of current BadPixIdx with repository-based HotPixels 
+Im[BadPixIdx] = Med[BadPixIdx] 
+##Im[HotPixels] = Med[HotPixels]
+
+# tmpY,tmpZ = opse.aspiics_get_opse(Im,header,params,verbose=False,save_image=True)        # find position of the OPSE LEDs in the image
 #sys.exit('exiting after OPSE')
 #Im   = np.subtract(Im,optics.ghost(header,params))
 #Im   = np.subtract(Im,np.multiply(optics.scatter(header,params),vign))
@@ -213,10 +229,10 @@ Im[OvrExpIdx] = np.inf #1.5e+30
 Im[BlankIdx]  = np.nan
 # finding min-max-mean-median
 BadIdx = OvrExpIdx | BlankIdx                                         # mask for all the bad pixels
-DATAMIN = np.min(Im[ ~ BadIdx])
-DATAMAX = np.max(Im[ ~ BadIdx])
-DATAMEAN = np.mean(Im[ ~ BadIdx])
-DATAMEDN = np.median(Im[ ~ BadIdx])
+DATAMIN = np.nanmin(Im[ ~ BadIdx])
+DATAMAX = np.nanmax(Im[ ~ BadIdx])
+DATAMEAN = np.nanmean(Im[ ~ BadIdx])
+DATAMEDN = np.nanmedian(Im[ ~ BadIdx])
 
 if mark_io:
     xio1=np.rint(x_IO).astype(int)  ;  yio1=np.rint(y_IO).astype(int)
@@ -288,7 +304,9 @@ Im = Im.astype(np.float32)
 #outputdir = './output/'
 #if os.path.exists(args.outputdir):
 #  outputdir = args.outputdir
-
+if not os.path.exists(outputdir):
+    print("% L2_MASTER. Output directory "+outputdir+" does not exist. Creating it.")
+    Path(outputdir).mkdir(parents=True, exist_ok=True)
 
 ### ************* write down the final Im into fits ****
 hdu=fits.PrimaryHDU(Im,header=header)
