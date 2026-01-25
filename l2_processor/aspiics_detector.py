@@ -2,7 +2,7 @@ import numpy as np
 from astropy.io import fits
 from scipy import interpolate
 import os
-from .banding_denoise import correct_banding, correct_banding_multiscale, _plot_banding_correction_before_after
+from banding_denoise import correct_banding, correct_banding_multiscale, plot_banding_correction_before_after
 
 ##### older version - in DN ###########
 #def darkcurrent(filename,**kwargs):
@@ -129,15 +129,12 @@ def banding_correction(Im, header, plotting=False):
     # use multiple passes with increasing filter sizes to progressively remove banding at different scales
     # This avoids overfitting corona structures into the banding profile compared to a single pass with a large 2d filter and small 1d filter
 
-    Im_corrected = correct_banding_multiscale(Im, ref_method="median", layers_2d=[3,7,15,31,63], ref_downscale=[1,1,2,2,4], filter_1d=[16,False,False,False,False], split_rows=True, plotting=plotting)
-    # Im_ = correct_banding_multiscale(Im, ref_method="median", layers_2d=[3,7,15,31,63], ref_downscale=[1,1,2,2,4], filter_1d=[16,64,256,512,512], split_rows=True, plotting=False)
-    Im_corrected = correct_banding(Im_corrected, ref_method="nlmeans", filter_2d=15, filter_1d=128, split_rows=True, plotting=False)
+    Im_corrected = correct_banding_multiscale(Im, ref_method="median", layers_2d=[3,7,15,31,63], ref_downscale=[1,1,2,2,4], apply_vert=[16,'global','global','global','global'], apply_horiz=[16,'global','global','global','global'], split_rows=True, plotting=False)
+    Im_corrected = correct_banding(Im_corrected, ref_method="nlmeans", filter_2d=15, apply_vert=128, apply_horiz=False, split_rows=True, plotting=False)
 
-    # old correction:
-    # Im_ = correct_banding_multiscale(Im, ref_method="median", layers_2d=[3,7,15], ref_downscale=[1,1,1], filter_1d=[16,64,128], split_rows=True, plotting=False) 
 
     if plotting:
-        _plot_banding_correction_before_after(Im, Im_corrected, split_rows=False, window=(1,-1,1,-1), title=f"Banding correction of {header.get('FILENAME','unknown')}", subtext="Comparison of original and banding-corrected images")
+        plot_banding_correction_before_after(Im, Im_corrected, split_rows=False, window=(1,-1,1,-1), title=f"Banding correction of {header.get('FILENAME','unknown')}", subtext="Comparison of original and banding-corrected images")
 
     return Im_corrected, version_msg
 
