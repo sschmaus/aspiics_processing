@@ -183,7 +183,7 @@ Var  = np.divide(Var, np.square(flat*Aphot/gain*t_exp))
 
 ### Apply banding correction after flat-fielding, as flat-field contains banding also
 ### Parameters are tuned to remove banding without affecting real coronal structures too much (very small changes are unavoidable)
-Im = det.correct_banding_splitrows_dyadic(Im, layers_2d=3, filter_1d=[16,64,128], plotting=False)
+Im, banding_msg = det.banding_correction(Im, header, plotting=False)
 
 
 #### Correction of hot pixels was moved after the diffraction subtraction. The diffraction pattern has too steep gradients
@@ -267,6 +267,7 @@ header.set("HISTORY", bias_msg)
 header.set("HISTORY", dc_msg)
 header.set("HISTORY", nlcorr_msg)
 header.set("HISTORY", flat_msg)
+header.set("HISTORY", banding_msg)
 #header.set("HISTORY", vign_msg)
 header.set("LEVEL", "L2")
 header.set('VERS_CAL', params['calib_data']['VERS_CAL'], "version of set of calibration files")
