@@ -30,6 +30,7 @@ parser.add_argument("file", help="input file (ASPIICS Level-1)")
 parser.add_argument("-D", "--diff", help="force diffraction file",default='None')
 parser.add_argument("--save_diff", help="save calculated diffraction file", default=False)
 parser.add_argument("-C", "--cal", help="force calibration file (default is 'calibr_data.json')", default='calibr_data.json')
+parser.add_argument("--banding_correction", help="apply banding correction", action='store_true', default=False)
 parser.add_argument("--filter", help='force filter ("Fe XIV","He I","Polarizer 0","Polarizer 60", "Polarizer 120", "Wideband"). Default is to read from the header.',default='None')
 parser.add_argument("--outdir", help="force output dir (default './output/')", default='./output/')
 parser.add_argument("--mark_IO",help="mark approximately IO center in the image", default=False)
@@ -129,7 +130,7 @@ header.set('CDELT2',params['calib_data']['pixscale'])
 
 
 Im_orig = Im      # temporary, to compare with the processed 
-nlcorr_msg="No nonlinearity" ; dc_msg="No dark current" ; bias_msg="No bias" ; flat_msg="No flat"
+nlcorr_msg="No nonlinearity" ; dc_msg="No dark current" ; bias_msg="No bias" ; flat_msg="No flat" ; banding_msg="No banding correction"
 
 ### $$$ ***      PLEASE DO NOT SPLIT THIS PART OF CODE INTO PIECES/FILES/PROCEDURES      *** $$$ ###
 ### $$$ ***  VEUILLEZ NE PAS DIVISER CETTE PARTIE DU CODE EN MORCEAUX/FILES/PROCEDURES   *** $$$ ###
@@ -183,7 +184,9 @@ Var  = np.divide(Var, np.square(flat*Aphot/gain*t_exp))
 
 ### Apply banding correction after flat-fielding, as flat-field contains banding also
 ### Parameters are tuned to remove banding without affecting real coronal structures too much (very small changes are unavoidable)
-Im, banding_msg = det.banding_correction(Im, header, plotting=False)
+if args.banding_correction:
+    print("Applying banding correction...")
+    Im, banding_msg = det.banding_correction(Im, header, plotting=False)
 
 
 #### Correction of hot pixels was moved after the diffraction subtraction. The diffraction pattern has too steep gradients

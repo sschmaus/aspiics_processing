@@ -227,7 +227,7 @@ def _generate_banding_reference(img, ref_method="median", filter_2d=15, ref_down
         # use non-local means denoising to isolate banding profile
         # this is more robust against residual structures than median filtering
 
-        print("Using non-local means denoising for banding reference")
+        # print("Using non-local means denoising for banding reference")
 
         sigma = np.nanstd(banding_ref)
         # fill NaNs before applying nlmeans to avoid edge artifacts and NaN bleeding
@@ -288,12 +288,7 @@ def correct_banding(img, filter_2d=15, apply_vert='global', apply_horiz='global'
 
     """
 
-    # if filter_1d is None:
-    #     filter_1d = filter_2d * 4  # make 1d filter size proportional to 2d filter size
-    # if filter_1d is not False:
-    #     filter_1d = max(3, filter_1d // ref_downscale)
-
-    # if ref_downscale == 1:
+    print(f"Applying {ref_method} banding correction with 2D filter size {filter_2d}")
 
     banding_ref = _generate_banding_reference(img, ref_method=ref_method, filter_2d=filter_2d, ref_downscale=ref_downscale, structures_threshold=structures_threshold)
 
@@ -387,7 +382,6 @@ def correct_banding_multiscale(img, ref_method ="median", layers_2d=[3,7,15], ap
 
     for n, filter_2d in enumerate(layers_2d):
         # multiscale filter sizes:
-        print(f"Applying banding correction with 2D filter size {filter_2d}")
         corrected_img = correct_banding(corrected_img, ref_method=ref_method, filter_2d=filter_2d, apply_vert=apply_vert[n], apply_horiz=apply_horiz[n], ref_downscale=ref_downscale[n], split_rows=split_rows, plotting=False)
 
 
