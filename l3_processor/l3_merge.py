@@ -1,9 +1,6 @@
 #!/bin/python3
 import numpy as np
-from scipy import ndimage
-from skimage import morphology
 from astropy.io import fits
-import matplotlib.pyplot as plt
 #import aspiics_detector  as det
 #import aspiics_optics    as optics
 import aspiics_misc       as am
@@ -24,6 +21,7 @@ parser.add_argument("files", help="1-to-3 input Level-2 ASPIICS fits (min,med,ma
 parser.add_argument("--outdir", help="force output dir (default './output/')", default='./output/')
 parser.add_argument("--center", help="re-center/de-rotate the images", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--coalign", help="co-align images such they match max t_exp image", default=False, action=argparse.BooleanOptionalAction)
+parser.add_argument("--soft_merge", help="use smooth merging over transition areas", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--save_shifted", help="save two shifted L2 images in addition to merged L3", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--CRVAL1", help="force CRVAL1 value for the files", type=float)
 parser.add_argument("--CRVAL2", help="force CRVAL2 value for the files", type=float)
@@ -149,59 +147,19 @@ if coalign:
        data1 = am.shift_image(data1,header1,header10,verbose=True)
        headerRef=header10.copy()
 
-def soft_merge(data_under, data_over, distance=30, plot=False):
-    """ Merge two images using soft transition over given distance (in pixels).
-        data_high: high-exposure image (to be used where valid)
-        data_low: low-exposure image (to be used to fill invalid pixels in high-exposure image)
-        distance: distance (in pixels) over which the weights change from 0 to 1
-    """
-    data_under_mask = np.isfinite(data_under) # all valid pixels
-    data_over_mask = ~np.isnan(data_over) # all non-NaN pixels, inf is ok
-
-    # all over areas where under data is invalid
-    fill_mask = data_over_mask * (~data_under_mask)
-    # remove small islands in the fill_mask with remove_small_objects because borders may not overlap perfectly after the coregistration 
-    # fill_mask = morphology.remove_small_objects(fill_mask.astype(bool), min_size=64, connectivity=1)
-
-    # calculate soft gradient with distance transform
-    data_over_alpha = ndimage.distance_transform_edt(~fill_mask)
-    # normalize to distance - this could be improved by using the slope of the image to determine blending distance (e.g., larger distance for shallower slopes)
-    data_over_alpha = 1-np.clip(data_over_alpha/distance,0,1)
-    # mask any area of the soft mask which doesn't have valid data_over
-    data_over_alpha = data_over_alpha * data_over_mask * data_under_mask
-
-    # now do the merging
-    Im_out = data_under
-    Im_out[fill_mask] = data_over[fill_mask]
-    Im_out[data_over_alpha>0] = data_over[data_over_alpha>0] * data_over_alpha[data_over_alpha>0] + data_under[data_over_alpha>0] * (1 - data_over_alpha[data_over_alpha>0])
-
-    if plot:
-        fig, ax = plt.subplots(1,5, figsize=(15,5))
-        ax[0].imshow(data_under_mask, cmap='gray', vmin=0, vmax=1)
-        ax[0].set_title('data_under valid mask')
-        ax[1].imshow(data_over_mask, cmap='gray', vmin=0, vmax=1)
-        ax[1].set_title('data_over valid mask')
-        ax[2].imshow(fill_mask, cmap='gray', vmin=0, vmax=1)
-        ax[2].set_title('fill_mask for data_over')
-        ax[3].imshow(data_over_alpha, cmap='gray')
-        ax[3].set_title('soft blending edges for data_over')
-        ax[4].imshow(Im_out, cmap='gray')
-        ax[4].set_title('merged image')
-        plt.tight_layout()
-        plt.show()
-
-    return Im_out
-
 
 # Merging two or three images. By default take the data from data10, but substitute the NaN/Inf pixels via the pixels from smaller exposure file
+if args.soft_merge:
+    distance = 30
+else:
+    distance = 0
 if nfiles == 3:
     # pixels over which the weights change from 0 to 1
-    distance = 30  
-    Im_out = soft_merge(data1, data01, distance=distance, plot=False)
-    Im_out = soft_merge(data10, Im_out, distance=distance, plot=False)
+    Im_out = am.soft_merge(data1, data01, distance=distance, plot=False)
+    Im_out = am.soft_merge(data10, Im_out, distance=distance, plot=False)
 
 elif nfiles == 2:
-    Im_out = soft_merge(data1, data01, distance=30, plot=False)
+    Im_out = am.soft_merge(data1, data01, distance=distance, plot=False)
 else:
     Im_out = data01
 
