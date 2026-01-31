@@ -124,6 +124,25 @@ def flat(header,params,**kwargs):
     return imagedata, version_msg+" with "+file
 
 def banding_correction(Im, header, plotting=False):
+    """
+    Applies banding correction to the input image Im.
+
+    Parameters
+    ----------
+    Im : 2D numpy array
+        Input image to be corrected for banding artifacts.
+    header : dict-like
+        Fits header containing metadata about the image.
+    plotting : bool, optional
+        If True, generates plots comparing original and corrected images. Default is False.
+    
+    Returns
+    -------
+    Im_corrected : 2D numpy array
+        Banding-corrected image.
+    version_msg : str
+        Version information of the banding correction function.
+    """
     version_msg = "aspiics_detector.banding_correction() v1.0"
 
     # use multiple passes with increasing filter sizes to progressively remove banding at different scales
