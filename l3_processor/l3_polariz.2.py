@@ -172,6 +172,10 @@ Dem_av=np.array([[np.mean(Dem11),np.mean(Dem21),np.mean(Dem31)],           #  fo
 #print(Dem)
 
 # Stokes components
+print("Mean (over FOV) coefficients for ")
+print("  ... for I: ", np.nanmean(Dem11), ", ", np.nanmean(Dem21), ", ", np.nanmean(Dem31), "   should be 2/3*(1+1+1) in the ideal 0,60,120 case")
+print("  ... for Q: ", np.nanmean(Dem12), ", ", np.nanmean(Dem22), ", ", np.nanmean(Dem32), "   should be 2/3*(1-1-1) ... ")
+print("  ... for U: ", np.nanmean(Dem13), ", ", np.nanmean(Dem23), ", ", np.nanmean(Dem33), "   should be 2/3*(0+1.732-1.732) ... ")
 I = Dem11*data1 + Dem21*data2 + Dem31*data3              # should be 2/3*(1 + 1 + 1) in ideal case 0, 60, 120
 Q = Dem12*data1 + Dem22*data2 + Dem32*data3              # should be 2/3*(2 - 1 - 1) in ideal case
 #print("Q coeff: ", Dem[1,0], Dem[1,1], Dem[1,2])
