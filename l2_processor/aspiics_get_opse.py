@@ -50,9 +50,9 @@ def aspiics_get_opse(Image_in,header,params,**kwargs):
     LEDB_Z =  0.0647 ; LEDB_Y = 0.1
     LEDC_Z =  0.0647 ; LEDC_Y =-0.1
     led_coords=np.array([[-LEDA_Z,-LEDB_Z,-LEDC_Z],[LEDA_Y,LEDB_Y,LEDC_Y]])   # calculate expected LEDs coordinates in pix from meters
-    ### During commissioning we have realized the images are 180deg rotated
-    #led_coords=-led_coords                                                    # During commissioning we have realized the images are 180deg rotated
-    ## Instead rotate the image
+    ### During commissioning phase the OSC was 180-deg rotated. It should be commented out for the majority of the mission 
+    led_coords=-led_coords                                                    
+    ##  During commissioning we have realized the images are 180deg rotated. Instead rotate the image
     print("  Rotating the image to take into account current L0/L1 processing\n   (with the rotation the image corresponds to the actual scene seen by ASPIICS)")
     Im = np.rot90(Im,2)
     x_IO=2047.0-x_IO  
