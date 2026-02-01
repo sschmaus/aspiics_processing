@@ -24,8 +24,9 @@ This repository is licensed under the MIT License for original code.
 ## Description of Modifications
 
 1. Fixed an issue in [`l2_master.py`](l2_processor/l2_master.py) where saturated pixels were not getting marked correctly. Now all out of range pixels from the nonlinearity correction will be flagged as saturated.
-2. Added smooth 30 px wide blending between exposures in [`l3_merge.py`](l3_processor/l3_merge.py) using the new[`soft_merge()`](https://github.com/sschmaus/aspiics_processing/blob/d37a291a8b9119dcf6974bfe102e28071eeebc48/l3_processor/aspiics_misc.py#L39) function to smooth the transition
-3. Added a multipass correction algorithm for the collumn-to-collumn variations remaining after L2 calibration. It works by isolating the erroneous signal using either median or non-local means prefiltering and then subtracts it from the image. The filter parameters are defined in [`banding_correction()`](https://github.com/sschmaus/aspiics_processing/blob/d37a291a8b9119dcf6974bfe102e28071eeebc48/l2_processor/aspiics_detector.py#L126) and the filter code is implemented in [`banding_denoise.py`](l2_processor/banding_denoise.py)
+1. Added smooth 30 px wide blending between exposures in [`l3_merge.py`](l3_processor/l3_merge.py) using the new[`soft_merge()`](https://github.com/sschmaus/aspiics_processing/blob/d37a291a8b9119dcf6974bfe102e28071eeebc48/l3_processor/aspiics_misc.py#L39) function to smooth the transition
+1. Added prefiltering to the affine transformation in [`aspiics_misc.py`](l3_processor/aspiics_misc.py) to improve the sharpness of resampled outputs. This required dealing with NaN values separately.
+1. Added a multipass correction algorithm for the collumn-to-collumn variations remaining after L2 calibration. It works by isolating the erroneous signal using either median or non-local means prefiltering and then subtracts it from the image. The filter parameters are defined in [`banding_correction()`](https://github.com/sschmaus/aspiics_processing/blob/227a4c4862e958ae423d1c234e616408443817bc/l2_processor/aspiics_detector.py#L126) and the filter code is implemented in [`banding_denoise.py`](l2_processor/banding_denoise.py)
 </br></br>![Before and after comparison of the banding correction](images/L2_banding_reduction.jpg)
 
 ## Further thoughts
